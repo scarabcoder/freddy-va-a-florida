@@ -1,5 +1,4 @@
 # tools/extract_chapter.py
-import re
 import sys
 
 # Exact Roman numerals for chapters I..XXI (extend if a longer source is used).

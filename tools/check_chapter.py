@@ -4,7 +4,7 @@ import re
 import sys
 
 _REF_RE = re.compile(r"\[\^([^\]]+)\](?!:)")   # [^id] not followed by ':'
-_DEF_RE = re.compile(r"^\[\^([^\]]+)\]:", re.MULTILINE)
+_DEF_RE = re.compile(r"^[ ]{0,3}\[\^([^\]]+)\]:", re.MULTILINE)
 
 
 def footnote_refs(md):
@@ -47,7 +47,11 @@ def check_chapter(md, glossary):
     heads = vocab_headwords(md)
     if not heads:
         errors.append("no '## Vocabulario' table rows found")
+    seen = set()
     for h in heads:
+        if h in seen:
+            errors.append(f"vocab '{h}' listed more than once in this chapter")
+        seen.add(h)
         if h in glossary:
             errors.append(f"vocab '{h}' already glossed in an earlier chapter (first-use rule)")
 
