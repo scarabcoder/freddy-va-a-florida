@@ -230,6 +230,17 @@ const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 let current = -1;
 
+/* ---------- Reading-progress persistence ----------
+   Stored in localStorage as {last: chapterIndex, scroll: {index: scrollTop}} */
+const PROGRESS_KEY = 'diglot-progress';
+let progress = (()=>{ try{ return JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {}; }catch(e){ return {}; } })();
+if(!progress.scroll) progress.scroll = {};
+let scrollSaveTimer;
+function saveProgress(){ try{ localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); }catch(e){} }
+function flushScroll(){            // persist current chapter's scroll position
+  if(current>=0){ progress.scroll[current] = Math.round(reader.scrollTop); progress.last = current; saveProgress(); }
+}
+
 function buildTOC(){
   let lastBand = null, html = '';
   CHAPTERS.forEach((c,i)=>{
@@ -245,7 +256,10 @@ function buildTOC(){
 
 async function load(i){
   if(i<0 || i>=CHAPTERS.length) return;
+  clearTimeout(scrollSaveTimer);
+  flushScroll();                 // remember where we left the chapter we're leaving
   current = i;
+  progress.last = i; saveProgress();
   location.hash = String(i);
   tocEl.querySelectorAll('a').forEach(a=>a.classList.toggle('active', +a.dataset.i===i));
   content.innerHTML = `<p style="text-align:center;color:var(--ink-soft)">Cargando…</p>`;
@@ -257,7 +271,7 @@ async function load(i){
     content.innerHTML = marked.parse(preprocess(md));
     rewireLinks();
     updateChapNav();
-    reader.scrollTo({top:0});
+    reader.scrollTo({top: progress.scroll[i] || 0, behavior:'auto'});  // resume where you left off
   }catch(e){
     showLoadError();
   }
@@ -325,6 +339,13 @@ content.addEventListener('click', e=>{
 });
 document.addEventListener('click', e=>{ if(!e.target.closest('.diglot')) hideTip(); });
 reader.addEventListener('scroll', hideTip, {passive:true});
+reader.addEventListener('scroll', ()=>{           // debounced save of reading position
+  clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(flushScroll, 200);
+}, {passive:true});
+// Catch the last position when the tab is hidden or closed
+window.addEventListener('pagehide', flushScroll);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushScroll(); });
 
 /* ---------- Controls: theme & font size ---------- */
 const root = document.documentElement;
@@ -365,7 +386,12 @@ function hashIndex(){
 window.addEventListener('hashchange',()=>{ const i = hashIndex(); if(i!==current) load(i); });
 
 buildTOC();
-load(hashIndex());
+// Prefer an explicit #hash (deep link); otherwise resume the last-read chapter
+let startIdx = 0;
+const bootHash = parseInt(location.hash.replace('#',''),10);
+if(Number.isInteger(bootHash) && bootHash>=0 && bootHash<CHAPTERS.length) startIdx = bootHash;
+else if(Number.isInteger(progress.last) && progress.last>=0 && progress.last<CHAPTERS.length) startIdx = progress.last;
+load(startIdx);
 </script>
 </body>
 </html>
